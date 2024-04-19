@@ -17,3 +17,17 @@ repos:
     hooks:
       - id: flake8
         files: ^(fastapi|flask)/
+  - repo: local
+    hooks:
+      - id: compile-python
+        name: Compile Python code
+        entry: sh -c 'python -m compileall fastapi/ && python -m compileall flask/'
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: run-tests
+        name: Run tests
+        entry: sh -c 'pytest fastapi/test_app.py && python flask/test_app.py'
+        language: system
+        pass_filenames: false
+        always_run: true

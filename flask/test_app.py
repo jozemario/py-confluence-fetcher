@@ -1,40 +1,127 @@
-import unittest
-from unittest.mock import patch
+import pytest
+from httpx import AsyncClient
+from confluence.models.content import Content
 from app import app
 
 
-class TestApp(unittest.TestCase):
-    def setUp(self):
-        self.client = app.test_client()
+@pytest.mark.asyncio
+async def test_get_page_content(mocker):
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        mock_response = {
+            "id": "123",
+            "type": "page",
+            "title": "Test Page",
+            "body": {
+                "storage": {
+                    "value": "<p>This is the page content.</p>",
+                    "representation": "storage",
+                }
+            },
+        }
+        mock_confluence_instance = mocker.MagicMock()
+        mock_confluence_instance.get_content_by_id.return_value = type(
+            "Page", (), mock_response
+        )
+        mocker.patch(
+            "confluence.client.Confluence.__enter__",
+            return_value=mock_confluence_instance,
+        )
+        mocker.patch("confluence.client.Confluence.__exit__")
 
-    @patch("app.confluence.get_spaces")
-    def test_get_spaces(self, mock_get_spaces):
-        mock_space = type("Space", (), {"name": "Test Space"})
-        mock_get_spaces.return_value = [mock_space]
+        response = await ac.get("/pages/123")
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": "123",
+            "type": "page",
+            "title": "Test Page",
+            "body": "<p>This is the page content.</p>",
+        }
 
-        response = self.client.get("/spaces")
-        data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(data, ["Test Space"])
-
-    @patch("app.confluence.create_page")
-    def test_create_page(self, mock_create_page):
-        mock_page = type("Page", (), {"id": "123", "title": "Test Page"})
-        mock_create_page.return_value = mock_page
+@pytest.mark.asyncio
+async def test_create_page(mocker):
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        mock_response = {"id": "123", "title": "New Page", "type": "page"}
+        mock_confluence_instance = mocker.MagicMock()
+        mock_confluence_instance.create_content.return_value = type(
+            "Page", (), mock_response
+        )
+        mocker.patch(
+            "confluence.client.Confluence.__enter__",
+            return_value=mock_confluence_instance,
+        )
+        mocker.patch("confluence.client.Confluence.__exit__")
 
         payload = {
             "space_key": "TEST",
-            "title": "Test Page",
-            "body": "This is a test page.",
+            "title": "New Page",
+            "body": "This is a new page.",
         }
 
-        response = self.client.post("/pages", json=payload)
-        data = response.get_json()
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(data, {"id": "123", "title": "Test Page"})
+        response = await ac.post("/pages", json=payload)
+        assert response.status_code == 201
+        assert response.json() == {"id": "123", "title": "New Page", "type": "page"}
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_create_with_minimal_json():
+    p = Content({"id": 1, "title": "Hello", "status": "current", "type": "page"})
+    assert str(p) == "1 - Hello"
+
+
+def test_create_complete():
+    p = Content(
+        {
+            "id": "65577",
+            "type": "page",
+            "status": "current",
+            "title": "SandBox",
+            "space": {"id": 98306, "key": "SAN", "name": "SandBox", "type": "global"},
+            "history": {
+                "latest": True,
+                "createdBy": {
+                    "type": "anonymous",
+                    "profilePicture": {
+                        "path": "anonymous.png",
+                        "width": 48,
+                        "height": 48,
+                        "isDefault": True,
+                    },
+                    "displayName": "Anonymous",
+                },
+                "createdDate": "2017-09-22T11:03:07.420+01:00",
+            },
+            "version": {
+                "by": {
+                    "type": "known",
+                    "username": "user",
+                    "userKey": "12345",
+                    "profilePicture": {
+                        "path": "default.png",
+                        "width": 48,
+                        "height": 48,
+                        "isDefault": True,
+                    },
+                    "displayName": "user",
+                },
+                "when": "2017-10-28T17:05:56.026+01:00",
+                "message": "",
+                "number": 8,
+                "minorEdit": False,
+                "hidden": False,
+            },
+            "body": {
+                "storage": {
+                    "value": "",
+                    "representation": "storage",
+                    "_expandable": {"content": "/rest/api/content/65577"},
+                }
+            },
+            "metadata": {},
+            "extensions": {"position": "none"},
+        }
+    )
+    assert p.body.storage == ""
+    assert p.body.storage_representation == "storage"
+    assert not hasattr(p.body, "edit")
+    assert p.history.latest
+    assert p.space.id == 98306

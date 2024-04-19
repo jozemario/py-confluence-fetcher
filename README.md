@@ -53,3 +53,14 @@ For Flask:
 python flask/test_app.py
 ```
 With this setup, the pre-commit hooks will run for both the FastAPI and Flask applications when you commit changes from the project root directory. The hooks will only apply to files within the respective directories.
+
+After updating the configuration, you need to run the following command to update the pre-commit hooks:
+```bash
+pre-commit install
+# Run pre-commit hooks
+pre-commit run --all-files
+
+# Run tests manually
+pytest fastapi/test_app.py
+python flask/test_app.py
+```
